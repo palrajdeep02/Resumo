@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useTransition, Suspense, useEffect } from "react"
-import { signIn, useSession } from "next-auth/react"
+import { useState, useTransition, Suspense } from "react"
+import { signIn } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { getUserRoleByEmail } from "@/server/auth-actions"
@@ -11,25 +11,10 @@ function LoginForm() {
   const callbackUrl = searchParams.get("callbackUrl") || "/"
   const registered = searchParams.get("registered")
 
-  const { data: session, status } = useSession()
-
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-
-  // If already authenticated, redirect directly to the appropriate dashboard
-  useEffect(() => {
-    if (status === "authenticated" && session?.user) {
-      const dest =
-        callbackUrl && callbackUrl !== "/" && callbackUrl !== "/login" && callbackUrl !== "/signup"
-          ? callbackUrl
-          : session.user.role === "RECRUITER"
-          ? "/dashboard/recruiter"
-          : "/dashboard/candidate"
-      window.location.href = dest
-    }
-  }, [status, session, callbackUrl])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,23 +51,11 @@ function LoginForm() {
     })
   }
 
-  // Show a spinner while session status is loading or redirecting
-  if (status === "loading" || status === "authenticated") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-sage">
-        <div className="flex flex-col items-center gap-3">
-          <span className="w-8 h-8 border-2 border-forest-soft border-t-moss rounded-full animate-spin" />
-          <span className="text-sm text-forest-soft font-medium">Redirecting to dashboard...</span>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-sage flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-[400px] space-y-6">
         {/* Conic Ring Brand Visual */}
-        <div 
+        <div
           className="relative w-14 h-14 rounded-full mx-auto flex items-center justify-center shrink-0"
           style={{ background: "conic-gradient(var(--moss) 0% 70%, var(--sand) 70% 100%)" }}
         >

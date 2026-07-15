@@ -1,21 +1,35 @@
 "use client"
 
-import { useState, useTransition, Suspense } from "react"
-import { signIn } from "next-auth/react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useTransition, Suspense, useEffect } from "react"
+import { signIn, useSession } from "next-auth/react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { getUserRoleByEmail } from "@/server/auth-actions"
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/"
   const registered = searchParams.get("registered")
+
+  const { data: session, status } = useSession()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // If already authenticated, redirect directly to the appropriate dashboard
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      const dest =
+        callbackUrl && callbackUrl !== "/" && callbackUrl !== "/login" && callbackUrl !== "/signup"
+          ? callbackUrl
+          : session.user.role === "RECRUITER"
+          ? "/dashboard/recruiter"
+          : "/dashboard/candidate"
+      window.location.href = dest
+    }
+  }, [status, session, callbackUrl])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,14 +51,11 @@ function LoginForm() {
         if (res?.error) {
           setError("Invalid email or password")
         } else {
+          // Determine destination from callbackUrl or role lookup
           let dest = callbackUrl
-          if (callbackUrl === "/" || callbackUrl === "/login" || callbackUrl === "/signup") {
+          if (!dest || dest === "/" || dest === "/login" || dest === "/signup") {
             const roleRes = await getUserRoleByEmail(email)
-            if (roleRes.role === "RECRUITER") {
-              dest = "/dashboard/recruiter"
-            } else {
-              dest = "/dashboard/candidate"
-            }
+            dest = roleRes.role === "RECRUITER" ? "/dashboard/recruiter" : "/dashboard/candidate"
           }
           window.location.href = dest
         }
@@ -53,6 +64,18 @@ function LoginForm() {
         setError("Something went wrong. Please try again.")
       }
     })
+  }
+
+  // Show a spinner while session status is loading or redirecting
+  if (status === "loading" || status === "authenticated") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-sage">
+        <div className="flex flex-col items-center gap-3">
+          <span className="w-8 h-8 border-2 border-forest-soft border-t-moss rounded-full animate-spin" />
+          <span className="text-sm text-forest-soft font-medium">Redirecting to dashboard...</span>
+        </div>
+      </div>
+    )
   }
 
   return (

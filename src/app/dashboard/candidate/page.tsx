@@ -31,7 +31,15 @@ export default async function CandidateDashboardPage() {
   })
 
   if (!profile) {
-    redirect("/login")
+    return (
+      <div className="min-h-screen bg-sage flex items-center justify-center">
+        <div className="bg-white border border-line rounded-[14px] p-8 max-w-md text-center space-y-4">
+          <h2 className="text-xl font-serif font-medium text-forest">Profile Not Found</h2>
+          <p className="text-sm text-forest-soft">Your candidate profile could not be loaded. This may be a database configuration issue.</p>
+          <p className="text-xs text-forest-soft font-mono bg-sage-2 p-2 rounded">Ensure DATABASE_URL is set in your environment variables.</p>
+        </div>
+      </div>
+    )
   }
 
   // Calculate completeness %

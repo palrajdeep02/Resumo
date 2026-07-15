@@ -1,40 +1,30 @@
-# Resumo — Security and Hardening Specifications
+# Security Architecture & Mitigations
 
-This document outlines the defensive measures implemented in **Resumo** to harden the application, protect AI APIs against abuse, defend prompts against injection attacks, isolate server secrets, and restrict browser-side vulnerabilities.
+This document outlines the threat model, mitigation strategies, and security design patterns implemented in **Resumo**.
 
----
+## 1. Threat Model & Mitigations
 
-## 1. Rate Limiting (`lib/rate-limit.ts`)
-*   **Mechanism**: Implemented a sliding-window tracker configured in `lib/rate-limit.ts`.
-*   **Policy**: Limits `/api/ai/score` and `/api/ai/tailor` endpoints to **10 requests per user per hour** to prevent API key exhaustion and control runtime compute billing.
-*   **Production Scalability**: The limiter uses a structured in-memory Map record-keeper. A code comment guide details how to drop-in Upstash Redis or `@upstash/ratelimit` for serverless environments where local node memory resets between invoke operations.
+### Stored XSS (Cross-Site Scripting)
+* **Threat**: Malicious candidates or recruiters inject script tags into inputs (like bios, job descriptions, or names) that execute when rendered to other users.
+* **Mitigation**: All text input fields are sanitized server-side in server actions before database insertion using `DOMPurify` (configured via `isomorphic-dompurify` to strip all HTML tags entirely for plain-text representations). React's default text rendering further ensures that escaping happens at view-time.
 
----
+### Path Traversal & Unrestricted File Uploads
+* **Threat**: Attacking candidates upload malicious script files (e.g. `.js`, `.exe`, or `.html` payloads) renamed with `.pdf` or `.docx` extensions to compromise the server or browser.
+* **Mitigation**: 
+  - File uploads strictly validate raw byte magic numbers on the server side: PDF files must start with `%PDF` (`25 50 44 46` in hex) and DOCX files must start with the standard ZIP archive header `PK\x03\x04` (`50 4B 03 04` in hex).
+  - Filenames are randomized and saved to a static public directory with strict extension assignments.
 
-## 2. Prompt Injection Mitigation (`lib/security.ts`)
-*   **Sanitization Filters**: User-pasted job descriptions and resume texts pass through `sanitizePromptInput` before LLM context concatenation.
-*   **Tag Escaping**: Translates XML brackets (`<` and `>`) into safe html entities (`&lt;` and `&gt;`). This blocks users from injecting closing tags (e.g. `</job_description_input>`) and breaking out of their defined data container.
-*   **Override Redaction**: Utilizes Regex pattern scanning to identify instruction override phrases (like `ignore previous instructions`, `system override`, `dan mode`, etc.) and replaces them with a `[REDACTED INSTRUCTION OVERRIDE ATTEMPT]` string.
-*   **Isolated Context**: All untrusted inputs are encapsulated within structural XML blocks to ensure the LLM treats them strictly as data, not prompt overrides.
+### Resource Abuse & API Exploitation
+* **Threat**: Automated scripts flood AI endpoints (resume parsing, applicant matching, quality checks, and AI description writing), incurring significant LLM API token costs.
+* **Mitigation**: An in-memory token rate limiter restricts AI requests per authenticated user/IP to a maximum of 20 calls per hour. Excess requests fail gracefully returning HTTP 429 warnings.
 
----
+### Authentication & RBAC (Role-Based Access Control)
+* **Threat**: Candidate accounts attempting to modify jobs, update company details, or fetch other candidates' resumes.
+* **Mitigation**: 
+  - Authentication is managed via Auth.js (NextAuth v5) utilizing cryptographically secure JWT tokens carrying user id and role.
+  - Server actions assert role controls (`CANDIDATE` or `RECRUITER`) on every execution.
+  - Recruiter actions verify the company ownership constraint, ensuring a user can only query/edit entities associated with their company profile ID.
+  - Next.js Edge proxy (`proxy.ts`) blocks unauthorized sub-page routes at the network boundary.
 
-## 3. Strict Input Schema Validation
-*   **Zod Schema Guarding**: Every POST API endpoint enforces input parameter validations using Zod schemas (`requestSchema.safeParse`).
-*   **Invalidation Policies**: Any malformed payload, missing field, or invalid formatting (e.g. non-UUID parameters) is immediately rejected with a structured `400 Bad Request` JSON error response, preventing SQL errors or garbage API calls.
-
----
-
-## 4. Server Secret Containment
-*   **No Client Leakage**: Sensitive environment variables (`DATABASE_URL`, `NEXTAUTH_SECRET`, `AI_API_KEY`) are kept strictly server-only.
-*   **Convention Enforcement**: No secret carries the `NEXT_PUBLIC_` suffix, ensuring the Next.js compiler strips these keys from any browser bundle chunk should they accidentally be typed in client components.
-
----
-
-## 5. Defense-in-Depth HTTP Headers (`next.config.ts`)
-Configured custom HTTP response headers via Next.js configurations:
-*   **Content-Security-Policy (CSP)**: `default-src 'self'` restricts script/style load limits to prevent Cross-Site Scripting (XSS). Specific styles and font domains (`fonts.googleapis.com` and `fonts.gstatic.com`) are safelisted to support custom typography.
-*   **X-Frame-Options (DENY)**: Prevents clickjacking by denying page frames rendering inside `<iframe>` blocks on external websites.
-*   **X-Content-Type-Options (nosniff)**: Disables MIME-type sniffing to force the browser to respect standard headers.
-*   **Referrer-Policy**: Sets `origin-when-cross-origin` to avoid leaking detailed routing paths to external referrers.
-*   **Permissions-Policy**: Restricts access to client hardware APIs (e.g. camera, microphone, geolocation) that are not needed by the application.
+## 2. CSRF (Cross-Site Request Forgery)
+NextAuth v5 (Auth.js) implements double-submit CSRF cookie checks by default for all credential operations and mutation actions.

@@ -37,17 +37,16 @@ function LoginForm() {
         if (res?.error) {
           setError("Invalid email or password")
         } else {
-          if (callbackUrl === "/") {
+          let dest = callbackUrl
+          if (callbackUrl === "/" || callbackUrl === "/login" || callbackUrl === "/signup") {
             const roleRes = await getUserRoleByEmail(email)
             if (roleRes.role === "RECRUITER") {
-              router.push("/dashboard/recruiter")
+              dest = "/dashboard/recruiter"
             } else {
-              router.push("/dashboard/candidate")
+              dest = "/dashboard/candidate"
             }
-          } else {
-            router.push(callbackUrl)
           }
-          router.refresh()
+          window.location.href = dest
         }
       } catch (err) {
         console.error(err)

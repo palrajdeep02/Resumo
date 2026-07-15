@@ -125,7 +125,7 @@ Job Required Skills: ${(app.job.skillsRequired || []).join(", ")}
 Job Description: ${app.job.description.substring(0, 400)}...`,
           })
           aiFitSummary = text.trim()
-        } catch (e) {
+        } catch {
           aiFitSummary = "Error generating AI fit summary."
         }
       } else {
@@ -283,7 +283,7 @@ export async function getMatchesForCandidate(candidateId: string, limit = 5) {
             Job Title: ${raw.title}, Skills: ${raw.description.substring(0, 300)}...`,
           })
           fitExplanation = text.trim()
-        } catch (e) {
+        } catch {
           fitExplanation = "AI fit summary is currently unavailable."
         }
       } else {

@@ -56,7 +56,7 @@ export async function registerAction(values: z.infer<typeof registerSchema>) {
     const passwordHash = await bcrypt.hash(password, 10)
 
     // Execute in transaction
-    const result = await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       // 1. Create User
       const user = await tx.user.create({
         data: {
@@ -136,7 +136,7 @@ export async function getUserRoleByEmail(email: string) {
       select: { role: true },
     })
     return { role: user?.role || null }
-  } catch (err) {
+  } catch {
     return { role: null }
   }
 }
